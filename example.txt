@@ -1,0 +1,123 @@
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    CSVLoader,
+    UnstructuredWordDocumentLoader,
+    UnstructuredExcelLoader,
+    TextLoader,
+    UnstructuredHTMLLoader,
+    UnstructuredPowerPointLoader,
+    UnstructuredFileIOLoader
+)
+import os
+
+#pdf_loader
+pdf_path = os.path.join("data", "BHM-503T.pdf")
+loader_pdf = PyPDFLoader(pdf_path)
+pages_pdf = loader_pdf.load() 
+
+#csv_loader
+csv_path = os.path.join("data","annual-enterprise-survey-2024-financial-year-provisional.csv" )
+loader_csv = CSVLoader(csv_path)
+pages_csv = loader_csv.load()
+
+#docs_loader
+docx_path = os.path.join("data", "sample.docx")
+loader_docx = UnstructuredWordDocumentLoader(docx_path)
+pages_docx = loader_docx.load()
+
+#xlsx_loader(excel sheet)
+xlsx_path = os.path.join("data", "sample.xlsx")
+loader_xlsx = UnstructuredExcelLoader(xlsx_path)
+pages_xlsx = loader_xlsx.load()
+
+#splitter divides the big contents into smaller parts for the model to understad 
+splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+docs_pdf = splitter.split_documents(pages_pdf)
+docs_csv = splitter.split_documents(pages_csv)
+docs_docx = splitter.split_documents(pages_docx)
+docs_xlsx = splitter.split_documents(pages_xlsx)
+
+all_docs = docs_pdf + docs_csv + docs_docx + docs_xlsx
+
+embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+vector_db = FAISS.from_documents(all_docs, embedding_model)
+vector_db.save_local("vectorstore_index")
+
+
+@tool
+def document_qa_tool(query: str) -> str:
+    """Answers user queries by performing retrieval-augmented generation from loaded documents."""
+    try:
+        response = rag_chain(query)  # ✅ just call it directly
+        return str(response)
+    except Exception as e:
+        return f"❌ Error processing query: {str(e)}"
+
+
+from dotenv import load_dotenv
+from backend.agent import agent_executor
+from backend.pipeline import rag_chain, vector_db
+import os
+
+load_dotenv()
+
+def main():
+    print("🤖 ScandDoc AI - Document Question Answering System")
+    print("=" * 50)
+    
+    # Check if vectorstore exists
+    if not os.path.exists("vectorstore_index"):
+        print("❌ Vectorstore not found!")
+        print("Please run 'python -m backend.indexer' first to build the vectorstore")
+        return
+    
+    if not vector_db:
+        print("❌ Vector database not initialized!")
+        print("Please check your vectorstore and try again")
+        return
+    
+    print("✅ System initialized successfully!")
+    print("Ask me regarding your documents (type 'exit' to quit):")
+    print("💡 Try: 'What documents are available?' or 'What is in [filename]?'")
+    
+    while True:
+        try:
+            user_input = input("\nYou: ")
+            if user_input.lower() in ["exit", "quit", "bye"]:
+                print("👋 Goodbye!")
+                break
+            
+            if not user_input.strip():
+                print("Please enter a valid question.")
+                continue
+            
+            print("\n🔍 Processing your question...")
+            
+            try:
+                response = agent_executor.invoke({"input": user_input})
+                print(f"\n🤖 ScandDoc AI: {response['output']}")
+            except Exception as e:
+                print(f"\n❌ Agent Error: {str(e)}")
+                print("Let me try a direct search...")
+                
+                # Fallback to direct RAG
+                if rag_chain:
+                    try:
+                        fallback_response = rag_chain(user_input)
+                        print(f"\n🤖 ScandDoc AI: {fallback_response}")
+                    except Exception as e2:
+                        print(f"❌ Fallback also failed: {str(e2)}")
+            
+        except KeyboardInterrupt:
+            print("\n👋 Goodbye!")
+            break
+        except Exception as e:
+            print(f"\n❌ Error: {str(e)}")
+            print("Please try again or type 'exit' to quit.")
+
+if __name__ == "__main__":
+    main()

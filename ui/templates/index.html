@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScandDoc AI UI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      height: 100vh;
+      background: linear-gradient(to bottom, #000 70%, #fff 30%);
+      display: flex;
+      flex-direction: column;
+      color: white;
+    }
+
+    .container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .input-area {
+      background-color: #fff;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-top: 1px solid #ddd;
+    }
+
+    input[type="text"] {
+      width: 60%;
+      padding: 1rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      outline: none;
+      background-color: #f8f8f8;
+      color: #333;
+      margin-right: 10px;
+    }
+
+    button {
+      padding: 1rem 1.5rem;
+      font-size: 1rem;
+      background-color: #000;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #333;
+    }
+
+    .output-area {
+      flex: 1;
+      background-color: #000;
+      padding: 2rem;
+      color: #fff;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .output-area .message {
+      animation: fadeIn 0.6s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .timestamp {
+      font-size: 0.8rem;
+      color: #999;
+      text-align: left;
+      margin-top: 4px;
+    }
+
+    .placeholder {
+      font-family: 'Libre Baskerville', serif;
+      font-size: 1.2rem;
+      color: #ccc;
+      text-align: center;
+      padding-top: 5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="output-area" id="output">
+      <div class="placeholder" id="placeholder">Upload your documents to begin</div>
+    </div>
+    <div class="input-area">
+      <input type="text" id="query" placeholder="Ask ScandDoc AI something..." />
+      <button onclick="sendQuery()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('query');
+    const outputArea = document.getElementById('output');
+    const placeholder = document.getElementById('placeholder');
+
+    input.addEventListener("keypress", function (e) {
+      if (e.key === "Enter") sendQuery();
+    });
+
+    function sendQuery() {
+      const query = input.value.trim();
+      if (!query) return;
+
+      placeholder.style.display = 'none';
+
+      const userMessage = document.createElement("div");
+      userMessage.className = "message";
+      userMessage.innerHTML = `<strong>You:</strong> ${query}<div class='timestamp'>${new Date().toLocaleTimeString()}</div>`;
+      outputArea.appendChild(userMessage);
+
+      const thinkingMessage = document.createElement("div");
+      thinkingMessage.className = "message";
+      thinkingMessage.innerHTML = `<em>ScanDoc AI is thinking<span id="dots">.</span></em>`;
+      outputArea.appendChild(thinkingMessage);
+      scrollToBottom();
+
+      let dots = 1;
+      const dotInterval = setInterval(() => {
+        if (dots >= 3) dots = 0;
+        document.getElementById("dots").textContent = ".".repeat(++dots);
+      }, 400);
+
+      fetch("/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query })
+      })
+        .then(res => res.json())
+        .then(data => {
+          clearInterval(dotInterval);
+          thinkingMessage.remove();
+
+          const aiResponse = document.createElement("div");
+          aiResponse.className = "message";
+          aiResponse.innerHTML = `<strong>ScanDoc AI:</strong> ${data.response}<div class='timestamp'>${new Date().toLocaleTimeString()}</div>`;
+          outputArea.appendChild(aiResponse);
+          scrollToBottom();
+        })
+        .catch(err => {
+          clearInterval(dotInterval);
+          thinkingMessage.remove();
+          const error = document.createElement("div");
+          error.className = "message";
+          error.innerHTML = `<strong>Error:</strong> ${err.message}`;
+          outputArea.appendChild(error);
+        });
+
+      input.value = "";
+    }
+
+    function scrollToBottom() {
+      outputArea.scrollTop = outputArea.scrollHeight;
+    }
+  </script>
+</body>
+</html>

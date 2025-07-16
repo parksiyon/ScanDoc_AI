@@ -1,0 +1,48 @@
+
+from dotenv import load_dotenv
+import os
+from langchain_core.prompts import PromptTemplate
+from langchain_ollama import OllamaLLM
+from langchain.vectorstores import FAISS
+from langchain.embeddings import HuggingFaceEmbeddings
+
+load_dotenv()
+
+embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+vector_db = FAISS.load_local("vectorstore_index", embedding_model)
+
+#languagemodel = OllamaLLM(model="gemma:7b-instruct-q4_K_M", temperature=0.1)
+languagemodel = OllamaLLM(model="phi", temperature=0.1)
+
+
+    
+    # Replace with actual past memory (here mocked)
+past_memory = "You uploaded a financial report last session."
+
+prompt = """
+        You are Gemma2 AI, an expert robotic assistant built for document intelligence but able to converse when no documents are available.
+        You are trained to interpret any type of user query regarding documents.
+        Handle the request based on what it asks, and ignore irrelevant variables.
+
+        Query: {user_query}
+        Context: {contextual_memory}
+    """
+
+prompt_template = PromptTemplate.from_template(prompt)
+chain = prompt_template | languagemodel
+
+if __name__ == "__main__":
+    print("Gemma2 AI Document Reader says Hello!, what can I help you with?")
+
+    # Take real user input (for now, let's use input() for CLI test)
+    while True:
+       user_input = input("User: ")
+       if user_input.lower() == "exit":
+             break
+       output = chain.invoke({"user_query": user_input, "contextual_memory": past_memory})
+       
+       print("\nGemma2 AI:", output)
+
+                                           
+
